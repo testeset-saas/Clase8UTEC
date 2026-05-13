@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firewall Lab v6.1 | Editor & Compliance</title>
+    <style>
+        :root { --primary: #3b82f6; --danger: #ef4444; --warning: #f59e0b; --success: #10b981; --bg: #0f172a; --card-bg: #1e293b; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: #f1f5f9; margin: 0; padding: 0; }
+        .header { background: var(--card-bg); padding: 15px 30px; border-bottom: 4px solid var(--primary); display: flex; justify-content: space-between; align-items: center; }
+        .container { padding: 20px; max-width: 1750px; margin: 0 auto; display: grid; grid-template-columns: 1fr 420px; gap: 20px; }
+        .card { background: var(--card-bg); border-radius: 10px; border: 1px solid #334155; margin-bottom: 15px; overflow: hidden; }
+        .card-header { background: #334155; padding: 12px 15px; font-weight: bold; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
+        .card-body { padding: 15px; }
+        
+        /* Formulario de Adición */
+        .grid-editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        label { font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 4px; }
+        select, input, textarea { background: #0f172a; border: 1px solid #475569; color: white; padding: 8px; border-radius: 6px; width: 100%; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th { text-align: left; background: #0f172a; padding: 10px; color: #94a3b8; }
+        td { padding: 10px; border-bottom: 1px solid #334155; }
+        .regla-row:hover { background: #2d3a4e; cursor: pointer; }
+        
+        .badge { padding: 3px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; text-transform: uppercase; }
+        .badge-allow { background: var(--success); }
+        .badge-deny { background: var(--danger); }
+
+        .btn { cursor: pointer; border: none; border-radius: 6px; padding: 8px 15px; font-weight: 600; transition: 0.2s; font-size: 0.8rem; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-warn { background: var(--warning); color: #000; }
+        
+        .log-panel { background: #000; color: #22c55e; font-family: 'Courier New', monospace; height: 150px; overflow-y: auto; padding: 10px; border-radius: 8px; font-size: 0.75rem; border: 1px solid #334155; }
+        .compliance-box { background: #0f172a; padding: 12px; border-radius: 6px; border-left: 4px solid var(--primary); margin-top: 8px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <h1 style="margin:0; font-size: 1.4rem;">🛡️ pfSense Lab Pro v6.1</h1>
+        <small style="color: #94a3b8;">Editor de Políticas + Auditoría ISO/NIST</small>
+    </div>
+    <div style="display:flex; gap:10px;">
+        <button class="btn btn-warn" onclick="cargarEscenario('inseguro')">⚠️ Cargar Escenario Inseguro</button>
+        <button class="btn btn-primary" onclick="cargarEscenario('seguro')">✅ Cargar Escenario Seguro</button>
+        <button class="btn btn-danger" onclick="limpiarTodo()">🗑️ Limpiar Todo</button>
+    </div>
+</div>
+
+<div class="container">
+    <div class="main">
+        <!-- NUEVO: EDITOR DE POLÍTICAS PARA ADICIONAR REGLAS -->
+        <div class="card">
+            <div class="card-header">➕ Adicionar / Modificar Política</div>
+            <div class="card-body">
+                <div class="grid-editor">
+                    <div>
+                        <label>Nombre de Regla</label>
+                        <input type="text" id="editName" placeholder="Ej: Bloqueo SSH">
+                    </div>
+                    <div>
+                        <label>Origen</label>
+                        <select id="editSrc">
+                            <option value="Any">Any</option>
+                            <option value="LAN">LAN</option>
+                            <option value="Internet">Internet</option>
+                            <option value="VPN_Usuarios">VPN_Usuarios</option>
+                            <option value="192.168.100.10">Admin PC</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Destino</label>
+                        <select id="editDst">
+                            <option value="Any">Any</option>
+                            <option value="LAN">LAN</option>
+                            <option value="Internet">Internet</option>
+                            <option value="Servidor DB">Servidor DB</option>
+                            <option value="Firewall">Firewall</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Servicio/Puerto</label>
+                        <input type="text" id="editSrv" placeholder="443, 80, any">
+                    </div>
+                    <div>
+                        <label>Acción</label>
+                        <select id="editAction">
+                            <option value="Allow">Allow</option>
+                            <option value="Deny">Deny</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top:10px; display: grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                    <div>
+                        <label>Análisis de Riesgo y Cumplimiento (ISO/NIST/CIS)</label>
+                        <textarea id="editComp" rows="2" placeholder="Describa la vulnerabilidad o control normativo..."></textarea>
+                    </div>
+                    <div>
+                        <label>Security Profiles & Logging (SIEM/IPS/AV)</label>
+                        <textarea id="editSec" rows="2" placeholder="Ej: IPS activo, Log a Splunk..."></textarea>
+                    </div>
+                </div>
+                <button class="btn btn-success" style="width:100%; margin-top:15px;" onclick="guardarRegla()">💾 GUARDAR POLÍTICA EN ACL</button>
+            </div>
+        </div>
+
+        <!-- TABLA DE REGLAS -->
+        <div class="card">
+            <div class="card-header">📜 LISTA DE CONTROL DE ACCESO (ACL)</div>
+            <div class="card-body" style="padding:0;">
+                <table id="ruleTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th><th>Nombre</th><th>Origen</th><th>Destino</th><th>Servicio</th><th>Acción</th><th>Gestionar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaCuerpo"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SIMULADOR -->
+        <div class="card">
+            <div class="card-header">🚥 SIMULADOR DE TRÁFICO</div>
+            <div class="card-body">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <select id="simSrc"><option value="Any">Origen: Any</option><option value="LAN">Origen: LAN</option><option value="Internet">Origen: Internet</option><option value="VPN_Usuarios">Origen: VPN</option><option value="192.168.100.10">Origen: Admin PC</option></select>
+                    <select id="simDst"><option value="Any">Destino: Any</option><option value="LAN">Destino: LAN</option><option value="Internet">Destino: Internet</option><option value="Servidor DB">Destino: Servidor DB</option><option value="Firewall">Destino: Firewall</option></select>
+                    <select id="simSrv"><option value="any">Servicio: Any</option><option value="80">Servicio: HTTP (80)</option><option value="443">Servicio: HTTPS (443)</option><option value="3306">Servicio: MySQL (3306)</option><option value="22">Servicio: SSH (22)</option></select>
+                </div>
+                <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="evaluarTrafico()">PROBAR TRÁFICO</button>
+                <div id="resResultado" style="margin-top:10px; padding:12px; border-radius:6px; display:none; font-size:0.9rem; text-align:center;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="card">
+            <div class="card-header">📑 AUDITORÍA TÉCNICA</div>
+            <div class="card-body" id="auditPanel">
+                <p style="color:#94a3b8; font-size:0.85rem;">Seleccione una regla para auditar su cumplimiento normativo.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">📊 SIEM & PROFILES</div>
+            <div class="card-body">
+                <div id="logPanel" class="log-panel"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let rules = [];
+    let editIdx = -1;
+
+    // Escenarios base
+    const dbScenarios = {
+        inseguro: [
+            { name: "Permitir Todo LAN", src: "Any", dst: "LAN", srv: "any", action: "Allow", comp: "Vulnera ISO 27001 A.13.1.1. No hay segregación de red.", sec: "Sin logging. Sin perfiles de seguridad." },
+            { name: "DB Public Access", src: "Internet", dst: "Servidor DB", srv: "3306", action: "Allow", comp: "CIS Control 3.3. Exposición directa de base de datos.", sec: "Sin IPS. Riesgo de exfiltración." },
+            { name: "Admin Inseguro", src: "Any", dst: "Firewall", srv: "80", action: "Allow", comp: "NIST 800-53 AC-3. Gestión mediante protocolos no cifrados.", sec: "Tráfico en texto claro." },
+            { name: "LAN Outbound Any", src: "LAN", dst: "Internet", srv: "any", action: "Allow", comp: "ISO 27001 A.12.2. Riesgo de malware y C2.", sec: "Sin filtrado URL ni Sandbox." },
+            { name: "VPN post-auth", src: "VPN_Usuarios", dst: "LAN", srv: "any", action: "Allow", comp: "CIS 12.2. Falta de segmentación para usuarios remotos.", sec: "Sin inspección L7." }
+        ],
+        seguro: [
+            { name: "Admin HTTPS", src: "192.168.100.10", dst: "Firewall", srv: "443", action: "Allow", comp: "ISO 27001 A.9.4.4. Acceso restringido y cifrado.", sec: "Log: Splunk. Profile: Management IPS." },
+            { name: "Web Segura", src: "LAN", dst: "Internet", srv: "443", action: "Allow", comp: "CIS Control 9.2. Navegación inspeccionada.", sec: "Profile: AV Gateway, URL Filter, Sandbox." },
+            { name: "App to DB Only", src: "LAN", dst: "Servidor DB", srv: "3306", action: "Allow", comp: "NIST SP 800-41. Microsegmentación aplicada.", sec: "Profile: SQL DPI Active." },
+            { name: "Drop Internet", src: "Internet", dst: "Any", srv: "any", action: "Deny", comp: "Principio de Mínimo Privilegio (NIST).", sec: "Log: Dropped Traffic SIEM." },
+            { name: "Deny All Implicit", src: "Any", dst: "Any", srv: "any", action: "Deny", comp: "Cumplimiento ISO 27001 (Default Deny).", sec: "Full Log activo." }
+        ]
+    };
+
+    function cargarEscenario(tipo) {
+        rules = [...dbScenarios[tipo]];
+        renderRules();
+        addLog("SISTEMA", `Escenario ${tipo.toUpperCase()} cargado.`);
+    }
+
+    function guardarRegla() {
+        const r = {
+            name: document.getElementById('editName').value || "Sin Nombre",
+            src: document.getElementById('editSrc').value,
+            dst: document.getElementById('editDst').value,
+            srv: document.getElementById('editSrv').value || "any",
+            action: document.getElementById('editAction').value,
+            comp: document.getElementById('editComp').value,
+            sec: document.getElementById('editSec').value
+        };
+
+        if(editIdx > -1) {
+            rules[editIdx] = r;
+            editIdx = -1;
+        } else {
+            rules.push(r);
+        }
+        
+        limpiarForm();
+        renderRules();
+        addLog("ADMIN", `ACL '${r.name}' guardada.`);
+    }
+
+    function renderRules() {
+        const tbody = document.getElementById('tablaCuerpo');
+        tbody.innerHTML = '';
+        rules.forEach((r, idx) => {
+            const row = tbody.insertRow();
+            row.className = 'regla-row';
+            row.onclick = () => mostrarDetalle(idx);
+            row.innerHTML = `
+                <td>${idx + 1}</td>
+                <td>${r.name}</td>
+                <td>${r.src}</td>
+                <td>${r.dst}</td>
+                <td>${r.srv}</td>
+                <td><span class="badge ${r.action === 'Allow' ? 'badge-allow' : 'badge-deny'}">${r.action}</span></td>
+                <td>
+                    <button class="btn btn-primary" style="padding:2px 6px;" onclick="prepararEdicion(${idx}, event)">✏️</button>
+                    <button class="btn btn-danger" style="padding:2px 6px;" onclick="borrarRegla(${idx}, event)">🗑️</button>
+                </td>
+            `;
+        });
+    }
+
+    function mostrarDetalle(idx) {
+        const r = rules[idx];
+        document.getElementById('auditPanel').innerHTML = `
+            <h3 style="color:var(--primary); margin:0 0 10px 0;">${r.name}</h3>
+            <strong>Auditoría Normativa:</strong>
+            <div class="compliance-box">${r.comp || "Sin datos de cumplimiento."}</div>
+            <br>
+            <strong>Seguridad y SIEM:</strong>
+            <div class="compliance-box" style="border-left-color: var(--success);">${r.sec || "Sin perfiles asignados."}</div>
+        `;
+    }
+
+    function prepararEdicion(idx, e) {
+        e.stopPropagation();
+        const r = rules[idx];
+        editIdx = idx;
+        document.getElementById('editName').value = r.name;
+        document.getElementById('editSrc').value = r.src;
+        document.getElementById('editDst').value = r.dst;
+        document.getElementById('editSrv').value = r.srv;
+        document.getElementById('editAction').value = r.action;
+        document.getElementById('editComp').value = r.comp;
+        document.getElementById('editSec').value = r.sec;
+    }
+
+    function borrarRegla(idx, e) {
+        e.stopPropagation();
+        rules.splice(idx, 1);
+        renderRules();
+    }
+
+    function evaluarTrafico() {
+        const s = document.getElementById('simSrc').value;
+        const d = document.getElementById('simDst').value;
+        const v = document.getElementById('simSrv').value;
+        
+        let match = rules.find(r => 
+            (r.src === 'Any' || s === r.src) && 
+            (r.dst === 'Any' || d === r.dst) && 
+            (r.srv === 'any' || v === r.srv)
+        );
+
+        const res = document.getElementById('resResultado');
+        res.style.display = 'block';
+        if(match) {
+            res.style.background = match.action === 'Allow' ? '#064e3b' : '#7f1d1d';
+            res.innerHTML = `MATCH: ${match.name} | ACCIÓN: ${match.action}`;
+            addLog("TRAFFIC", `${s} -> ${d} | MATCH: ${match.name}`);
+        } else {
+            res.style.background = '#334155';
+            res.innerHTML = "DROP: Sin coincidencia (Implicit Deny)";
+            addLog("TRAFFIC", `${s} -> ${d} | NO MATCH (DROP)`);
+        }
+    }
+
+    function addLog(cat, msg) {
+        const p = document.getElementById('logPanel');
+        p.innerHTML = `[${new Date().toLocaleTimeString()}] [${cat}] ${msg}<br>` + p.innerHTML;
+    }
+
+    function limpiarForm() {
+        document.getElementById('editName').value = '';
+        document.getElementById('editComp').value = '';
+        document.getElementById('editSec').value = '';
+        editIdx = -1;
+    }
+
+    function limpiarTodo() { rules = []; renderRules(); addLog("SISTEMA", "ACL Limpiada."); }
+
+    cargarEscenario('inseguro');
+</script>
+</body>
+</html>
